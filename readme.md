@@ -1,298 +1,132 @@
 # GitDiff2PDF
 
-Generate a clean, PR‑style **PDF** from normal **unified `git diff`** output.
-
-- **Unified view (default)** like Bitbucket: `-` lines in **red**, `+` lines in **green**, context **gray**  
-- Optional **side‑by‑side** view  
-- Crisp typography with **system fonts** (Consolas / Segoe UI on Windows; DejaVu on Linux) and safe fallbacks  
-- **Header/Footer**, **page numbers**, **line numbers**, **file badges**, and **hunk headers**  
-- Thoughtful pagination: **keep-together** (avoid splitting a small file across pages), **widow/orphan protection**  
-- Robust parsing and **encoding handling** (UTF‑8 & UTF‑16 PowerShell redirects)
-
----
-
-## Why?
-
-For exams (e.g., **IPA EFZ**) or audits, you often must submit the **changed code**. PDFs are easy to archive, share, review, and annotate. This tool turns your `git diff` into a **readable, paginated PDF** that feels like a code review tool.
-
----
+Generate clean, PR-style **PDF** and **Word** documents from unified `git diff` output.
 
 ## Features
 
-- **Unified view** (default): One column; deletions in red, additions in green, context lines gray  
-- **Side-by-side view** (optional): Old (left) | New (right)  
-- **Grouping**: by **file → hunk**  
-- **Line numbers** (gutter, subtle)  
-- **Subtle backgrounds** and **color bars** like modern PR UIs  
-- **Header & Footer**: title + timestamp; `Page X / N`  
-- **Pagination**:
-  - **Keep-together** (unified): a file that fits on next page won’t be split at the end of the previous page  
-  - **Widow/Orphan protection** so hunk headers don’t appear alone at page bottoms  
-- **Fonts**: uses system TTFs if available; otherwise falls back to Courier safely (no font exceptions)  
-- **Encoding**: handles UTF‑8, UTF‑8‑BOM, and PowerShell’s UTF‑16 LE automatically  
-- **Sanitization**: removes BOMs, zero‑widths, NBSP/rare spaces, and common “dot/ellipsis” artifacts at the start
+| Feature | Details |
+|---|---|
+| **Unified view** (default) | One column — deletions in red, additions in green, context grey |
+| **Side-by-side view** | Old (left) vs. New (right) with per-side line numbers |
+| **Word output** | Optional `.docx` alongside the PDF (requires `python-docx`) |
+| **File badges & hunk headers** | Grouped by file then hunk; `@@ … @@` headers can be shown or hidden (`--hunk-header`) |
+| **Line numbers** | Subtle gutter numbers for every line |
+| **Pagination** | Keep-together per file/hunk, widow/orphan protection |
+| **Themes** | Light (default) and dark |
+| **Fonts** | System fonts (Consolas / Segoe UI on Windows, DejaVu on Linux) with Courier fallback |
+| **Encoding** | Auto-detects UTF-8, UTF-8-BOM, UTF-16 LE/BE, Latin-1 |
 
 ---
 
 ## Requirements
 
 - **Python 3.9+**
-- **PyMuPDF** (aka `pymupdf`)
-
-Install:
+- **PyMuPDF** (`pymupdf`)
+- **python-docx** *(optional, for Word output)*
 
 ```bash
-pip install pymupdf
+pip install pymupdf python-docx
 ```
-
-> **Windows (PowerShell):**
->
-> ```powershell
-> py -m pip install pymupdf
-> ```
 
 ---
 
 ## Quick Start
 
-### 1 Create a diff
-
-**PowerShell 5.1** (ensure UTF‑8!):
+### 1. Create a diff
 
 ```powershell
-git diff <from-commit> <to-commit> -- . ':(exclude)path/to/big/folder' |
+# PowerShell 5.1 (ensure UTF-8)
+git diff <from> <to> -- . ':(exclude)path/to/big/folder' |
   Out-File -Encoding utf8 compare.diff
+
+# PowerShell 7+ / Bash / WSL / Linux / macOS
+git diff <from> <to> -- . ':(exclude)path/to/big/folder' > compare.diff
 ```
 
-**PowerShell 7+ / Git Bash / WSL / Linux / macOS**:
+### 2. Generate the output
 
 ```bash
-git diff <from-commit> <to-commit> -- . ':(exclude)path/to/big/folder' > compare.diff
-```
+# Unified PDF (Bitbucket-style)
+python gitdiff2pdf.py compare.diff -o output.pdf --title "Changed Code" --landscape
 
-Or pipe directly to the script (no temp file):
+# Only changes (hide context)
+python gitdiff2pdf.py compare.diff -o output.pdf --hide-context
 
-```bash
-git diff <from-commit> <to-commit> | python gitdiff2pdf.py - -o diff.pdf --title "Changed Code"
+# Hide @@ hunk headers (clean separator only)
+python gitdiff2pdf.py compare.diff -o output.pdf --hunk-header hide
+
+# Side-by-side
+python gitdiff2pdf.py compare.diff -o output.pdf --view side-by-side
+
+# PDF + Word
+python gitdiff2pdf.py compare.diff -o output.pdf --word
+
+# PDF + Word with custom path
+python gitdiff2pdf.py compare.diff -o output.pdf --word-output review.docx
+
+# Dark theme
+python gitdiff2pdf.py compare.diff -o output.pdf --theme dark --word
+
+# Pipe directly from git (no temp file)
+git diff <from> <to> | python gitdiff2pdf.py - -o output.pdf
 ```
 
 ---
 
-### 2 Generate the PDF
+## CLI Reference
 
-**Unified (Bitbucket‑style):**
-
-```bash
-python gitdiff2pdf.py compare.diff -o ipa-unified.pdf --title "Changed Code (Unified)" --landscape
-```
-
-**Only changes (hide context):**
-
-```bash
-python gitdiff2pdf.py compare.diff -o ipa-unified-changes.pdf --view unified --hide-context
-```
-
-**Side-by-side:**
-
-```bash
-python gitdiff2pdf.py compare.diff -o ipa-sbs.pdf --view side-by-side
-```
-
----
-
-## CLI Options
-
-- `inputs`  
-  One or more diff files, or `-` for STDIN.
-
-- `-o, --output` **(required)**  
-  Output PDF path.
-
-- `--title`  
-  Document title (header).
-
-- `--view unified|side-by-side`  
-  Default: `unified`.
-
-- `--hide-context`  
-  Show only changed lines (`+`/`-`) in unified view.
-
-- `--landscape`  
-  A4 landscape (useful for long lines).
-
-- `--font-size` *(float, default 9.5)*  
-  Monospace font size for code & numbers.
-
-- `--tabsize` *(int, default 4)*  
-  Tab expansion (tabs → spaces for width measurement).
-
-- `--theme light|dark`  
-  Light is default; dark is optimized for on-screen viewing.
-
-- `--debug`  
-  Print parser debug info (stderr).
-
-- Font overrides (optional; Windows examples):
-  - `--mono-font-file "C:\Windows\Fonts\consola.ttf"`
-  - `--mono-bold-font-file "C:\Windows\Fonts\consolab.ttf"`
-  - `--ui-font-file "C:\Windows\Fonts\segoeui.ttf"`
-  - `--ui-bold-font-file "C:\Windows\Fonts\segoeuib.ttf"`
+| Flag | Default | Description |
+|---|---|---|
+| `inputs` | — | One or more `.diff` files, or `-` for STDIN |
+| `-o, --output` | *(required)* | Output PDF path |
+| `--word` | `false` | Also generate a `.docx` (same base name as `--output`) |
+| `--word-output FILE` | — | Custom `.docx` output path |
+| `--title TEXT` | `Changed Code` | Document title in the header |
+| `--view MODE` | `unified` | `unified` or `side-by-side` |
+| `--hide-context` | `false` | Show only `+`/`-` lines in unified view |
+| `--hunk-header MODE` | `show` | `show` = display `@@ … @@` headers, `hide` = empty blue separator |
+| `--landscape` | `false` | A4 landscape orientation |
+| `--font-size PT` | `9.5` | Monospace font size |
+| `--tabsize N` | `4` | Tab-to-spaces expansion width |
+| `--theme THEME` | `light` | `light` or `dark` |
+| `--debug` | `false` | Print parser debug info to stderr |
+| `--mono-font-file` | — | Custom TTF/OTF for monospace |
+| `--mono-bold-font-file` | — | Custom TTF/OTF for monospace bold |
+| `--ui-font-file` | — | Custom TTF/OTF for UI text |
+| `--ui-bold-font-file` | — | Custom TTF/OTF for UI bold text |
 
 ---
 
-## Output Layout & Pagination
+## Layout & Pagination
 
-- **Unified view**  
-  - File “badge” (blue band) **close** to the first hunk header  
-  - Small gap between **blue hunk header** and **code**  
-  - Subtle **block gaps** between hunks / files (to avoid cramping)
-  - **Keep-together (unified)**: before rendering a file, the script **measures its height**.  
-    - If it **fits on the current page** → render here  
-    - If it **doesn’t fit here but would fit on a *new* page** → **page break before the file**  
-    - If it **doesn’t fit on a single page** → normal flow (split across pages)
-  - **Widow/Orphan protection** ensures the hunk header is not stranded at a page bottom without at least a few code lines following.
-
-- **Side-by-side view**  
-  - Old (left) | New (right) with line numbers per side  
-  - (Keep-together heuristic is implemented for **unified**; side-by-side uses continuous flow)
+- **Unified view** — file badge, hunk header, then code lines in a single column
+  - **Keep-together**: if a whole file fits on the next page, it won't be split at the bottom of the current one
+  - **Widow/orphan protection**: hunk headers are never stranded alone at a page bottom
+- **Side-by-side view** — old (left) and new (right) with continuous flowing layout
 
 ---
 
-## Fonts & Typography
+## Encoding Tips (Windows)
 
-- Automatically uses system fonts if available:
-  - **Windows**: Consolas (mono), Segoe UI (UI)
-  - **Linux**: DejaVu Sans Mono (mono), DejaVu Sans (UI)
-- If fonts can’t be resolved or names are unsafe (contain spaces), the script falls back to **Courier** / **Courier‑Bold** and **avoids font errors**.
-- All width measurements use the actual font to keep wrapping and alignment precise.
-
----
-
-## Encoding & Diff Tips (Windows PowerShell)
-
-- **PowerShell 5.1** redirects (`>`) in **UTF‑16 LE** by default → **use `Out-File -Encoding utf8`** or pipe into the script.
-- The script **auto-detects** UTF‑8/UTF‑8‑BOM/UTF‑16LE/BE, but making the diff **UTF‑8** is cleaner.
-- **Not supported**: `--word-diff`, `--name-only`, `--name-status`, or pure binary-only changes (no hunks).
-
-Recommended:
+PowerShell 5.1 uses UTF-16 LE by default for `>` redirects.
+Use `Out-File -Encoding utf8` or pipe directly to the script:
 
 ```powershell
-# UTF‑8 redirection (PS 5.1)
 git diff <from> <to> | Out-File -Encoding utf8 compare.diff
 ```
+
+The script auto-detects encoding, but UTF-8 is recommended.
+
+**Not supported:** `--word-diff`, `--name-only`, `--name-status`, binary-only changes.
 
 ---
 
 ## Troubleshooting
 
-### “No parsable diffs found.”
-
-- Ensure it’s a **unified diff** containing `@@` hunk headers (e.g., `git diff -U3` or `git show <commit>`).
-- Not supported: `--word-diff`, `--name-only`, `--name-status`.
-- Check encoding (especially PS 5.1). Try `--debug`.
-
-### “bad fontname chars {' '}" or “need font file or buffer”
-
-- You passed a font with spaces or a font that can’t be loaded.  
-  The script already **falls back** to Courier.  
-  To force specific fonts, use `--mono-font-file` / `--ui-font-file` with full TTF paths.
-
-### Weird dots / ellipsis at the top (`···`, `…`, `•`)
-
-- The script removes BOMs, zero‑widths, NBSP/rare spaces, and common dot/ellipsis bullets.  
-  If you still see such characters inside actual code content, share a snippet (they might be **part of the code**).
-
-### Broken alignment or wrapping**
-
-- Use `--landscape` for longer lines.  
-- Adjust `--font-size` (e.g., 9.0–10.5).  
-- Increase `--tabsize` for better visual alignment if your diffs use tabs.
-
----
-
-## Known Limitations
-
-- Requires **unified diffs** with `@@` hunks.  
-- **Keep-together** is implemented for **unified** mode; **side-by-side** uses flowing layout (can be added if needed).
-- Inline **word-level** highlights (within a single line) are not included (can be added as a future enhancement).
-
----
-
-## Example Workflows
-
-**Compare a commit range, exclude large folders, and export PDF (Unified):**
-
-```powershell
-git diff <a-commit> <b-commit> -- . ':(exclude)src/BigAssets' |
-  Out-File -Encoding utf8 compare.diff
-
-python gitdiff2pdf.py compare.diff -o changed-code.pdf --title "Changed Code (Unified)" --view unified --landscape
-```
-
-**Direct pipe to STDIN:**
-
-```bash
-git diff <a-commit> <b-commit> | python gitdiff2pdf.py - -o diff.pdf --title "Changed Code"
-```
-## Word
-
-```bash
-pip install python-docx
-```
-
-> **Windows (PowerShell):**
->
-> ```powershell
-> py -m pip install python-docx
-> ```
-
-### New function: `render_word()`
-A complete Word renderer that mirrors the PDF output:
-
-| Feature | Details |
+| Problem | Solution |
 |---|---|
-| **File badge** | Blue-background, bold monospace row |
-| **Hunk header** | Blue-background `@@ … @@` row |
-| **Hunk suffix** | Green-background added line (same as PDF) |
-| **Added lines** | Green background + line number gutter |
-| **Removed lines** | Red background + line number gutter |
-| **Context lines** | Grey background + line number gutter |
-| **Side-by-side** | Two-column table per paired row |
-| **Dark/light theme** | Same colour tokens as the PDF |
-| **Font** | Consolas monospace in all code cells |
-
----
-
-### New CLI flags
-
-| Flag | Meaning |
-|---|---|
-| `--word` | Generate a `.docx` next to the PDF (same base name) |
-| `--word-output FILE.docx` | Generate a `.docx` at a custom path |
-
----
-
-### Usage examples
-
-```bash
-# PDF only (unchanged behaviour)
-python gitdiff2pdf.py my.diff -o output.pdf
-
-# PDF + Word (auto-named output.docx)
-python gitdiff2pdf.py my.diff -o output.pdf --word
-
-# PDF + Word with a custom docx name
-python gitdiff2pdf.py my.diff -o output.pdf --word-output review.docx
-
-# Word only (still produces the PDF, just ignore it – or redirect to /dev/null)
-python gitdiff2pdf.py my.diff -o /dev/null --word-output review.docx
-
-# Side-by-side + Word
-python gitdiff2pdf.py my.diff -o output.pdf --view side-by-side --word
-
-# Dark theme
-python gitdiff2pdf.py my.diff -o output.pdf --theme dark --word
-```
-
----
+| *"No parsable diffs found."* | Ensure input is a unified diff with `@@` hunks. Try `--debug`. |
+| *Font errors / spaces in font name* | Falls back to Courier automatically. Use `--mono-font-file` for a specific TTF. |
+| *Dots/ellipsis at the top* | BOMs, zero-widths, NBSP, and bullet artefacts are stripped automatically. |
+| *Broken alignment / wrapping* | Use `--landscape` for long lines, or reduce `--font-size`. |
 
